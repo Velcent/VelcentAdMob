@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+	<init>
+		<log text="VelcentAdMob Android init"/>
+		<setBoolFromProperty result="bVelcentAdMobEnabled" ini="Engine" section="/Script/VelcentAdMob.VelcentAdMobSettings" property="bEnableAdMob" default="true"/>
+		<setStringFromProperty result="VelcentAdMobAppId" ini="Engine" section="/Script/VelcentAdMob.VelcentAdMobSettings" property="AndroidAdMobApplicationId" default="ca-app-pub-3940256099942544~3347511713"/>
+	</init>
+
+	<gradleProperties>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				<insert>
+					android.useAndroidX=true
+					android.enableJetifier=true
+				</insert>
+			</true>
+		</if>
+	</gradleProperties>
+
+	<androidManifestUpdates>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				<addPermission android:name="android.permission.INTERNET"/>
+				<addPermission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+				<setElement result="VelcentAdMobMeta" value="meta-data"/>
+				<addAttribute tag="$VelcentAdMobMeta" name="android:name" value="com.google.android.gms.ads.APPLICATION_ID"/>
+				<addAttribute tag="$VelcentAdMobMeta" name="android:value" value="$S(VelcentAdMobAppId)"/>
+				<addElement tag="application" name="VelcentAdMobMeta"/>
+			</true>
+		</if>
+	</androidManifestUpdates>
+
+	<buildGradleAdditions>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				<insert>
+					dependencies {
+						implementation 'com.google.android.gms:play-services-ads:25.4.0'
+					}
+				</insert>
+			</true>
+		</if>
+	</buildGradleAdditions>
+
+	<gameActivityImportAdditions>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				<insert>
+					import android.view.Gravity;
+					import android.view.View;
+					import android.view.ViewGroup;
+					import android.widget.FrameLayout;
+					import java.util.concurrent.atomic.AtomicBoolean;
+
+					import com.google.android.gms.ads.AdError;
+					import com.google.android.gms.ads.AdListener;
+					import com.google.android.gms.ads.AdRequest;
+					import com.google.android.gms.ads.AdSize;
+					import com.google.android.gms.ads.AdView;
+					import com.google.android.gms.ads.FullScreenContentCallback;
+					import com.google.android.gms.ads.LoadAdError;
+					import com.google.android.gms.ads.MobileAds;
+					import com.google.android.gms.ads.OnUserEarnedRewardListener;
+					import com.google.android.gms.ads.RequestConfiguration;
+					import com.google.android.gms.ads.initialization.InitializationStatus;
+					import com.google.android.gms.ads.initialization.OnInitializationCompleteListener;
+					import com.google.android.gms.ads.interstitial.InterstitialAd;
+					import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+					import com.google.android.gms.ads.rewarded.RewardItem;
+					import com.google.android.gms.ads.rewarded.RewardedAd;
+					import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+				</insert>
+			</true>
+		</if>
+	</gameActivityImportAdditions>
+
+	<gameActivityClassAdditions>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				<insert>
+					<![CDATA[
+	private static final int VELCENT_ADMOB_TYPE_BANNER = 0;
+	private static final int VELCENT_ADMOB_TYPE_INTERSTITIAL = 1;
+	private static final int VELCENT_ADMOB_TYPE_REWARDED = 2;
+
+	private static final int VELCENT_ADMOB_EVENT_INITIALIZE_STARTED = 0;
+	private static final int VELCENT_ADMOB_EVENT_INITIALIZED = 1;
+	private static final int VELCENT_ADMOB_EVENT_INITIALIZATION_FAILED = 2;
+	private static final int VELCENT_ADMOB_EVENT_LOAD_STARTED = 3;
+	private static final int VELCENT_ADMOB_EVENT_LOADED = 4;
+	private static final int VELCENT_ADMOB_EVENT_FAILED_TO_LOAD = 5;
+	private static final int VELCENT_ADMOB_EVENT_OPENED = 6;
+	private static final int VELCENT_ADMOB_EVENT_CLOSED = 7;
+	private static final int VELCENT_ADMOB_EVENT_FAILED_TO_SHOW = 8;
+	private static final int VELCENT_ADMOB_EVENT_CLICKED = 9;
+	private static final int VELCENT_ADMOB_EVENT_IMPRESSION = 10;
+
+	private final AtomicBoolean VelcentAdMobInitializeCalled = new AtomicBoolean(false);
+	private AdView VelcentAdMobBannerView = null;
+	private InterstitialAd VelcentAdMobInterstitialAd = null;
+	private RewardedAd VelcentAdMobRewardedAd = null;
+	private boolean VelcentAdMobInterstitialLoading = false;
+	private boolean VelcentAdMobRewardedLoading = false;
+
+	public static native void nativeVelcentAdMobOnAdEvent(String adUnitId, int adType, int eventType, int errorCode, String message);
+	public static native void nativeVelcentAdMobOnReward(String adUnitId, String rewardType, int amount);
+
+	private void VelcentAdMobEmitEvent(String adUnitId, int adType, int eventType, int errorCode, String message) {
+		nativeVelcentAdMobOnAdEvent(adUnitId == null ? "" : adUnitId, adType, eventType, errorCode, message == null ? "" : message);
+	}
+
+	private AdRequest VelcentAdMobBuildRequest() {
+		return new AdRequest.Builder().build();
+	}
+
+	public void AndroidThunkJava_VelcentAdMobInitialize() {
+		if (VelcentAdMobInitializeCalled.getAndSet(true)) {
+			VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_INITIALIZED, 0, "Already initialized.");
+			return;
+		}
+
+		VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_INITIALIZE_STARTED, 0, "");
+		RequestConfiguration requestConfiguration = new RequestConfiguration.Builder().build();
+		MobileAds.setRequestConfiguration(requestConfiguration);
+
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					MobileAds.initialize(_activity, new OnInitializationCompleteListener() {
+						@Override
+						public void onInitializationComplete(InitializationStatus initializationStatus) {
+							VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_INITIALIZED, 0, "");
+						}
+					});
+				} catch (Exception exception) {
+					VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_INITIALIZATION_FAILED, 0, exception.getMessage());
+				}
+			}
+		}).start();
+	}
+
+	private AdSize VelcentAdMobGetBannerSize(boolean adaptive) {
+		if (!adaptive) {
+			return AdSize.BANNER;
+		}
+
+		int adWidthPixels = getResources().getDisplayMetrics().widthPixels;
+		float density = getResources().getDisplayMetrics().density;
+		int adWidth = Math.max(320, (int)(adWidthPixels / density));
+		return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(_activity, adWidth);
+	}
+
+	public void AndroidThunkJava_VelcentAdMobShowBanner(final String adUnitId, final int position, final boolean adaptive) {
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					VelcentAdMobDestroyBannerOnUiThread();
+
+					VelcentAdMobBannerView = new AdView(_activity);
+					VelcentAdMobBannerView.setAdUnitId(adUnitId);
+					VelcentAdMobBannerView.setAdSize(VelcentAdMobGetBannerSize(adaptive));
+					VelcentAdMobBannerView.setAdListener(new AdListener() {
+						@Override
+						public void onAdLoaded() {
+							VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_LOADED, 0, "");
+						}
+
+						@Override
+						public void onAdFailedToLoad(LoadAdError loadAdError) {
+							VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_FAILED_TO_LOAD, loadAdError.getCode(), loadAdError.getMessage());
+						}
+
+						@Override
+						public void onAdClicked() {
+							VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_CLICKED, 0, "");
+						}
+
+						@Override
+						public void onAdImpression() {
+							VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_IMPRESSION, 0, "");
+						}
+					});
+
+					FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+						FrameLayout.LayoutParams.WRAP_CONTENT,
+						FrameLayout.LayoutParams.WRAP_CONTENT);
+					params.gravity = (position == 1 ? Gravity.BOTTOM : Gravity.TOP) | Gravity.CENTER_HORIZONTAL;
+					addContentView(VelcentAdMobBannerView, params);
+
+					VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_LOAD_STARTED, 0, "");
+					VelcentAdMobBannerView.loadAd(VelcentAdMobBuildRequest());
+				} catch (Exception exception) {
+					VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_BANNER, VELCENT_ADMOB_EVENT_FAILED_TO_LOAD, 0, exception.getMessage());
+				}
+			}
+		});
+	}
+
+	public void AndroidThunkJava_VelcentAdMobHideBanner() {
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				if (VelcentAdMobBannerView != null) {
+					VelcentAdMobBannerView.setVisibility(View.GONE);
+				}
+			}
+		});
+	}
+
+	private void VelcentAdMobDestroyBannerOnUiThread() {
+		if (VelcentAdMobBannerView == null) {
+			return;
+		}
+
+		AdView oldBanner = VelcentAdMobBannerView;
+		VelcentAdMobBannerView = null;
+		if (oldBanner.getParent() instanceof ViewGroup) {
+			((ViewGroup)oldBanner.getParent()).removeView(oldBanner);
+		}
+		oldBanner.destroy();
+	}
+
+	public void AndroidThunkJava_VelcentAdMobDestroyBanner() {
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				VelcentAdMobDestroyBannerOnUiThread();
+			}
+		});
+	}
+
+	public void AndroidThunkJava_VelcentAdMobLoadInterstitial(final String adUnitId) {
+		if (VelcentAdMobInterstitialLoading) {
+			return;
+		}
+
+		VelcentAdMobInterstitialLoading = true;
+		VelcentAdMobInterstitialAd = null;
+		VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_LOAD_STARTED, 0, "");
+
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				InterstitialAd.load(_activity, adUnitId, VelcentAdMobBuildRequest(), new InterstitialAdLoadCallback() {
+					@Override
+					public void onAdLoaded(InterstitialAd interstitialAd) {
+						VelcentAdMobInterstitialLoading = false;
+						VelcentAdMobInterstitialAd = interstitialAd;
+						VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_LOADED, 0, "");
+					}
+
+					@Override
+					public void onAdFailedToLoad(LoadAdError loadAdError) {
+						VelcentAdMobInterstitialLoading = false;
+						VelcentAdMobInterstitialAd = null;
+						VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_FAILED_TO_LOAD, loadAdError.getCode(), loadAdError.getMessage());
+					}
+				});
+			}
+		});
+	}
+
+	public boolean AndroidThunkJava_VelcentAdMobIsInterstitialReady() {
+		return VelcentAdMobInterstitialAd != null;
+	}
+
+	public void AndroidThunkJava_VelcentAdMobShowInterstitial() {
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				if (VelcentAdMobInterstitialAd == null) {
+					VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_FAILED_TO_SHOW, 0, "Interstitial is not loaded.");
+					return;
+				}
+
+				final InterstitialAd adToShow = VelcentAdMobInterstitialAd;
+				VelcentAdMobInterstitialAd = null;
+				adToShow.setFullScreenContentCallback(new FullScreenContentCallback() {
+					@Override
+					public void onAdShowedFullScreenContent() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_OPENED, 0, "");
+					}
+
+					@Override
+					public void onAdDismissedFullScreenContent() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_CLOSED, 0, "");
+					}
+
+					@Override
+					public void onAdFailedToShowFullScreenContent(AdError adError) {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_FAILED_TO_SHOW, adError.getCode(), adError.getMessage());
+					}
+
+					@Override
+					public void onAdClicked() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_CLICKED, 0, "");
+					}
+
+					@Override
+					public void onAdImpression() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_INTERSTITIAL, VELCENT_ADMOB_EVENT_IMPRESSION, 0, "");
+					}
+				});
+				adToShow.show(_activity);
+			}
+		});
+	}
+
+	public void AndroidThunkJava_VelcentAdMobLoadRewarded(final String adUnitId) {
+		if (VelcentAdMobRewardedLoading) {
+			return;
+		}
+
+		VelcentAdMobRewardedLoading = true;
+		VelcentAdMobRewardedAd = null;
+		VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_LOAD_STARTED, 0, "");
+
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				RewardedAd.load(_activity, adUnitId, VelcentAdMobBuildRequest(), new RewardedAdLoadCallback() {
+					@Override
+					public void onAdLoaded(RewardedAd rewardedAd) {
+						VelcentAdMobRewardedLoading = false;
+						VelcentAdMobRewardedAd = rewardedAd;
+						VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_LOADED, 0, "");
+					}
+
+					@Override
+					public void onAdFailedToLoad(LoadAdError loadAdError) {
+						VelcentAdMobRewardedLoading = false;
+						VelcentAdMobRewardedAd = null;
+						VelcentAdMobEmitEvent(adUnitId, VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_FAILED_TO_LOAD, loadAdError.getCode(), loadAdError.getMessage());
+					}
+				});
+			}
+		});
+	}
+
+	public boolean AndroidThunkJava_VelcentAdMobIsRewardedReady() {
+		return VelcentAdMobRewardedAd != null;
+	}
+
+	public void AndroidThunkJava_VelcentAdMobShowRewarded() {
+		_activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				if (VelcentAdMobRewardedAd == null) {
+					VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_FAILED_TO_SHOW, 0, "Rewarded ad is not loaded.");
+					return;
+				}
+
+				final RewardedAd adToShow = VelcentAdMobRewardedAd;
+				VelcentAdMobRewardedAd = null;
+				adToShow.setFullScreenContentCallback(new FullScreenContentCallback() {
+					@Override
+					public void onAdShowedFullScreenContent() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_OPENED, 0, "");
+					}
+
+					@Override
+					public void onAdDismissedFullScreenContent() {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_CLOSED, 0, "");
+					}
+
+					@Override
+					public void onAdFailedToShowFullScreenContent(AdError adError) {
+						VelcentAdMobEmitEvent("", VELCENT_ADMOB_TYPE_REWARDED, VELCENT_ADMOB_EVENT_FAILED_TO_SHOW, adError.getCode(), adError.getMessage());
+					}
+				});
+
+				adToShow.show(_activity, new OnUserEarnedRewardListener() {
+					@Override
+					public void onUserEarnedReward(RewardItem rewardItem) {
+						nativeVelcentAdMobOnReward("", rewardItem.getType(), rewardItem.getAmount());
+					}
+				});
+			}
+		});
+	}
+					]]>
+				</insert>
+			</true>
+		</if>
+	</gameActivityClassAdditions>
+
+	<proguardAdditions>
+		<if condition="bVelcentAdMobEnabled">
+			<true>
+				-keep public class com.google.android.gms.ads.** { public *; }
+				-keep public class com.google.ads.** { public *; }
+				-keepattributes *Annotation*
+			</true>
+		</if>
+	</proguardAdditions>
+</root>
